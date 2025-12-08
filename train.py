@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import torch.multiprocessing as mp
 from multiprocessing import Manager
+import json
 
 from datamodule import EmotionDataset
 from datamodule_korean import KoreanEmotionDataset
@@ -86,9 +87,20 @@ def parse_args():
         action = "store_true",
         help = "디버그 모드: 하나의 샘플만 테스트 (--samples는 샘플 인덱스로 사용)"
     )
+    parser.add_argument(
+        "--save_io",
+        action = "store_true",
+        help = "입력/출력을 JSON 파일로 저장"
+    )
+    parser.add_argument(
+        "--io_output_file",
+        type = str,
+        default = None,
+        help = "입출력 저장 파일명 (기본값: {model_name}_io.json)"
+    )
     return parser.parse_args()
 
-def worker_process(gpu_id, model_name, few_shot_examples, test_samples, results_dict, worker_id):
+def worker_process(gpu_id, model_name, few_shot_examples, test_samples, results_dict, worker_id, save_io=False, io_list=None):
     """
     각 GPU에서 실행될 워커 프로세스
     """
@@ -110,13 +122,28 @@ def worker_process(gpu_id, model_name, few_shot_examples, test_samples, results_
         gold_ko = en_id_to_ko(label_id)
 
         prompt = build_few_shot_prompt(few_shot_examples, text)
-        output = generate(prompt, max_new_tokens=32, gpu_id=0)  # CUDA_VISIBLE_DEVICES로 인해 항상 0
+        output = generate(prompt, max_new_tokens=8, gpu_id=0)  # CUDA_VISIBLE_DEVICES로 인해 항상 0
 
         pred_ko = extrat_emotion_ko_from_output(output)
 
         total += 1
-        if pred_ko == gold_ko:
+        is_correct = (pred_ko == gold_ko)
+        if is_correct:
             correct += 1
+
+        # 입출력 저장
+        if save_io and io_list is not None:
+            io_record = {
+                "sample_index": i,
+                "input_text": text,
+                "prompt": prompt,
+                "model_output": output,
+                "predicted_emotion": pred_ko,
+                "gold_emotion": gold_ko,
+                "gold_label_id": label_id,
+                "is_correct": is_correct
+            }
+            io_list.append(io_record)
 
         if (i + 1) % 10 == 0:
             print(f"[Worker {worker_id}] 진행: {i+1}/{len(test_samples)}")
@@ -184,7 +211,7 @@ def main():
         # 모델 예측
         generate = get_model_generate(model_name)
         print(f"🤖 모델 생성 중...")
-        output = generate(prompt, max_new_tokens=32, gpu_id=gpu_ids[0])
+        output = generate(prompt, max_new_tokens=8, gpu_id=gpu_ids[0])
 
         print(f"\n📤 모델 출력 (raw):")
         print(f"   '{output}'\n")
@@ -227,11 +254,14 @@ def main():
     manager = Manager()
     results_dict = manager.dict()
 
+    # 입출력 저장용 리스트 (save_io 플래그가 있을 때만)
+    io_list = manager.list() if args.save_io else None
+
     processes = []
     for i, gpu_id in enumerate(gpu_ids):
         p = mp.Process(
             target=worker_process,
-            args=(gpu_id, model_name, few_shot_examples, sample_chunks[i], results_dict, i)
+            args=(gpu_id, model_name, few_shot_examples, sample_chunks[i], results_dict, i, args.save_io, io_list)
         )
         p.start()
         processes.append(p)
@@ -260,7 +290,7 @@ def main():
     log_lines.append(f"Accuracy : {acc:.4f}\n")
     log_lines.append(f"Correct : {total_correct}/{total_samples}\n")
 
-    results_dir = Path("/home/eastj/study/capstone/results")
+    results_dir = Path("/home/eastj/study/capstone/result")
     results_dir.mkdir(exist_ok = True)
 
     result_filename = args.result_name if args.result_name else f"{model_name}_result.txt"
@@ -270,6 +300,20 @@ def main():
 
     print(f'\n[INFO] 최종 정확도: {acc:.4f} ({total_correct}/{total_samples})')
     print(f'[INFO] 결과가 저장되었습니다: {out_path}')
+
+    # 입출력 JSON 저장
+    if args.save_io and io_list is not None:
+        io_filename = args.io_output_file if args.io_output_file else f"{model_name}_io.json"
+        io_path = results_dir / io_filename
+
+        # Manager.list()를 일반 list로 변환
+        io_data = list(io_list)
+
+        with io_path.open("w", encoding="utf-8") as f:
+            json.dump(io_data, f, ensure_ascii=False, indent=2)
+
+        print(f'[INFO] 입출력 데이터가 저장되었습니다: {io_path}')
+        print(f'[INFO] 총 {len(io_data)}개 샘플의 입출력이 기록되었습니다.')
 
 
 if __name__ == "__main__":

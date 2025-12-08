@@ -14,6 +14,7 @@ SAMPLES=1000
 USE_KOREAN="--use_korean"
 GPUS="0,1,2"
 DEBUG=""  # 디버그 모드: "--debug" 입력 시 샘플 1개만 테스트 (SAMPLES가 인덱스로 사용됨)
+SAVE_IO="--save_io"  # 입출력 JSON 저장: "--save_io" 입력 시 활성화
 
 # 모델 리스트
 MODELS=("qwen" "llama" "ministral" "solar" "gpt")
@@ -25,6 +26,7 @@ for MODEL in "${MODELS[@]}"; do
     echo "--------------------------------------"
 
     RESULT_NAME="${MODEL}_korean_${SHOTS}shot_${SAMPLES}.txt"
+    IO_FILE="${MODEL}_io.json"
 
     python3 train.py \
         --model_name $MODEL \
@@ -33,7 +35,9 @@ for MODEL in "${MODELS[@]}"; do
         --samples $SAMPLES \
         --gpus $GPUS \
         --result_name $RESULT_NAME \
-        $DEBUG
+        $DEBUG \
+        $SAVE_IO \
+        $([ -n "$SAVE_IO" ] && echo "--io_output_file $IO_FILE" || echo "")
 
     if [ $? -eq 0 ]; then
         echo "✅ $MODEL 완료!"
@@ -49,11 +53,11 @@ echo "모든 실험 완료!"
 echo "======================================"
 echo ""
 echo "결과 파일:"
-ls -lh results/*_korean_${SHOTS}shot_${SAMPLES}.txt
+ls -lh result/*_korean_${SHOTS}shot_${SAMPLES}.txt 2>/dev/null || echo "결과 파일 없음"
 echo ""
 echo "결과 요약:"
 for MODEL in "${MODELS[@]}"; do
-    RESULT_FILE="results/${MODEL}_korean_${SHOTS}shot_${SAMPLES}.txt"
+    RESULT_FILE="result/${MODEL}_korean_${SHOTS}shot_${SAMPLES}.txt"
     if [ -f "$RESULT_FILE" ]; then
         echo -n "$MODEL: "
         grep "Accuracy" "$RESULT_FILE" | tail -1

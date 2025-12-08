@@ -49,8 +49,14 @@ def generate(prompt, max_new_tokens, gpu_id=None):
             max_new_tokens = max_new_tokens,
             do_sample = False,
             pad_token_id = tokenizer.eos_token_id,
+            eos_token_id = tokenizer.eos_token_id,
         )
-    
+
     gen_ids = outputs[0][inputs["input_ids"].shape[1]:]
-    text = tokenizer.decode(gen_ids, skip_special_tokens = True)
-    return text.strip()
+    text = tokenizer.decode(gen_ids, skip_special_tokens = True).strip()
+
+    # 불필요한 부분 제거 (첫 줄바꿈 이전까지만 사용)
+    if '\n' in text:
+        text = text.split('\n')[0].strip()
+
+    return text

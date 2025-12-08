@@ -34,25 +34,39 @@ def _init_model(gpu_id=None):
 
 def generate(prompt: str, max_new_tokens: int = 32, gpu_id=None) -> str:
     """
-    LLaMA 모델로 텍스트 생성
+    LLaMA-3 Instruct 모델로 텍스트 생성
+    (chat template 사용 버전)
     """
     _init_model(gpu_id)
 
-    inputs = _tokenizer(
-        prompt,
+    # 1) chat 메시지 포맷으로 감싸기
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+
+    # 2) LLaMA 전용 chat template 적용
+    input_ids = _tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
         return_tensors="pt",
-        truncation=True,
-        max_length=2048,
     ).to(_device)
 
+    # 3) 생성
     with torch.no_grad():
         outputs = _model.generate(
-            **inputs,
+            input_ids=input_ids,
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=_tokenizer.eos_token_id,
+            eos_token_id=_tokenizer.eos_token_id,
         )
 
-    gen_ids = outputs[0][inputs["input_ids"].shape[1]:]
-    text = _tokenizer.decode(gen_ids, skip_special_tokens=True)
-    return text.strip()
+    # 4) 프롬프트 이후의 토큰만 잘라서 디코딩
+    gen_ids = outputs[0][input_ids.shape[1]:]
+    text = _tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+
+    # 5) 첫 줄만 사용 (감정 레이블 한 단어만 뽑고 싶은 경우)
+    if "\n" in text:
+        text = text.split("\n")[0].strip()
+
+    return text
