@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment Variables
+.env
+.env.local
+
+# API Keys (중요!)
+*.key
+credentials.json
+
+# Model Checkpoints & Cache
+*.pt
+*.pth
+*.bin
+*.safetensors
+checkpoint-*/
+models/
+.cache/
+huggingface/
+
+# Transformers cache
+~/.cache/huggingface/
+
+# Data
+*.csv
+*.json.gz
+*.parquet
+data/raw/
+data/processed/
+
+# Logs
+*.log
+logs/
+wandb/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Project Specific
+results/*.txt
+results/*.json
+korean_emotion_data/*.json
+!korean_emotion_data/README.md
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
