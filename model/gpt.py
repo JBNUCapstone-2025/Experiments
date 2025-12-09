@@ -2,6 +2,7 @@
 import os
 from openai import OpenAI
 
+# MODEL_NAME = "ft:gpt-4o-mini-2024-07-18:personal:emotion:CktCR1Hx"
 MODEL_NAME = "gpt-4o-mini"
 
 _client = None

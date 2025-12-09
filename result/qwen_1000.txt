@@ -1,0 +1,7 @@
+Model : qwen
+GPUs : [0, 1, 2]
+Few-shot per label : 0
+
+==== Final Result ====
+Accuracy : 0.4840
+Correct : 484/1000

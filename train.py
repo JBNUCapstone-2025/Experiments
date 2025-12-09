@@ -5,13 +5,11 @@ from multiprocessing import Manager
 import json
 
 from datamodule import EmotionDataset
-from datamodule_korean import KoreanEmotionDataset
 from data_loader import (
     build_few_shot_examples,
     build_few_shot_prompt,
-    extrat_emotion_ko_from_output,
-    ko_to_en_motion,
-    en_id_to_ko,
+    extract_emotion_en_from_output,
+    label_id_to_emotion,
     EMOTION_EN,
 )
 
@@ -72,22 +70,6 @@ def parse_args():
         help = "결과 파일명 (기본값: 모델명_result.txt)"
     )
     parser.add_argument(
-        "--use_korean",
-        action = "store_true",
-        help = "한국어로 번역된 데이터셋 사용"
-    )
-    parser.add_argument(
-        "--korean_data_dir",
-        type = str,
-        default = "./korean_emotion_data",
-        help = "한국어 데이터셋 디렉토리"
-    )
-    parser.add_argument(
-        "--debug",
-        action = "store_true",
-        help = "디버그 모드: 하나의 샘플만 테스트 (--samples는 샘플 인덱스로 사용)"
-    )
-    parser.add_argument(
         "--save_io",
         action = "store_true",
         help = "입력/출력을 JSON 파일로 저장"
@@ -118,16 +100,15 @@ def worker_process(gpu_id, model_name, few_shot_examples, test_samples, results_
         text = sample["text"]
         label_id = sample["label_id"]
 
-        gold_en = EMOTION_EN[label_id]
-        gold_ko = en_id_to_ko(label_id)
+        gold_en = label_id_to_emotion(label_id)
 
         prompt = build_few_shot_prompt(few_shot_examples, text)
         output = generate(prompt, max_new_tokens=8, gpu_id=0)  # CUDA_VISIBLE_DEVICES로 인해 항상 0
 
-        pred_ko = extrat_emotion_ko_from_output(output)
+        pred_en = extract_emotion_en_from_output(output)
 
         total += 1
-        is_correct = (pred_ko == gold_ko)
+        is_correct = (pred_en == gold_en)
         if is_correct:
             correct += 1
 
@@ -138,8 +119,8 @@ def worker_process(gpu_id, model_name, few_shot_examples, test_samples, results_
                 "input_text": text,
                 "prompt": prompt,
                 "model_output": output,
-                "predicted_emotion": pred_ko,
-                "gold_emotion": gold_ko,
+                "predicted_emotion": pred_en,
+                "gold_emotion": gold_en,
                 "gold_label_id": label_id,
                 "is_correct": is_correct
             }
@@ -164,69 +145,16 @@ def main():
     print(f"[INFO] 모델 선택 : {model_name}")
     print(f"[INFO] Few-shot per label : {K_PER_LABEL}")
     print(f"[INFO] 사용할 GPU : {gpu_ids}")
-    print(f"[INFO] 한국어 데이터셋 사용 : {args.use_korean}")
 
-    # 데이터셋 선택
-    if args.use_korean:
-        # Zero-shot이면 train_ds 필요 없음
-        if K_PER_LABEL > 0:
-            train_ds = KoreanEmotionDataset(args.korean_data_dir, seed = 42, split = "train")
-        test_ds = KoreanEmotionDataset(args.korean_data_dir, seed = 42, split = "test")
-    else:
-        if K_PER_LABEL > 0:
-            train_ds = EmotionDataset(DATA_PATH, seed = 42, split = "train")
-        test_ds = EmotionDataset(DATA_PATH, seed = 42, split = "test")
+    # 데이터셋 로드
+    val_ds = EmotionDataset(DATA_PATH, seed=42, split="validation")
+    test_ds = EmotionDataset(DATA_PATH, seed=42, split="test")
 
     # Few-shot examples 생성 (K_PER_LABEL > 0일 때만)
     if K_PER_LABEL > 0:
-        few_shot_examples = build_few_shot_examples(train_ds.dataset, K_PER_LABEL)
+        few_shot_examples = build_few_shot_examples(val_ds.dataset, K_PER_LABEL)
     else:
         few_shot_examples = []
-
-    # 디버그 모드: 단일 샘플만 테스트
-    if args.debug:
-        sample_idx = MAX_SAMPLES  # --samples를 인덱스로 사용
-        sample = test_ds[sample_idx]
-
-        print(f"\n{'='*60}")
-        print(f"🔍 디버그 모드 (샘플 인덱스: {sample_idx})")
-        print(f"{'='*60}\n")
-        print(f"📝 입력 텍스트:")
-        print(f"   {sample['text']}\n")
-        print(f"✅ 정답 레이블:")
-        print(f"   label: {sample['label']}")
-        print(f"   label_id: {sample['label_id']}\n")
-
-        # 프롬프트 생성
-        prompt = build_few_shot_prompt(
-            test_text=sample["text"],
-            few_shot_examples=few_shot_examples
-        )
-
-        print(f"💬 프롬프트:")
-        print(f"{'-'*60}")
-        print(prompt)
-        print(f"{'-'*60}\n")
-
-        # 모델 예측
-        generate = get_model_generate(model_name)
-        print(f"🤖 모델 생성 중...")
-        output = generate(prompt, max_new_tokens=8, gpu_id=gpu_ids[0])
-
-        print(f"\n📤 모델 출력 (raw):")
-        print(f"   '{output}'\n")
-
-        # 감정 추출
-        pred_emotion = extrat_emotion_ko_from_output(output)
-        print(f"🎯 예측 레이블:")
-        print(f"   {pred_emotion}\n")
-
-        # 정답 비교
-        is_correct = (pred_emotion == sample['label'])
-        result_emoji = "✅" if is_correct else "❌"
-        print(f"{result_emoji} 결과: {'정답' if is_correct else '오답'}")
-        print(f"\n{'='*60}\n")
-        return
 
     # 테스트 샘플 준비
     num_samples = min(MAX_SAMPLES, len(test_ds))

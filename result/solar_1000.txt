@@ -1,0 +1,7 @@
+Model : solar
+GPUs : [0, 1, 2]
+Few-shot per label : 0
+
+==== Final Result ====
+Accuracy : 0.5280
+Correct : 528/1000

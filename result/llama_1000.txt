@@ -1,7 +1,7 @@
-Model : qwen
+Model : llama
 GPUs : [0, 1, 2]
 Few-shot per label : 0
 
 ==== Final Result ====
-Accuracy : 0.4670
-Correct : 467/1000
+Accuracy : 0.5450
+Correct : 545/1000

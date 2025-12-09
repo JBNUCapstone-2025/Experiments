@@ -10,7 +10,7 @@ echo ""
 
 # 실험 설정
 SHOTS=0
-SAMPLES=1000
+SAMPLES=2000
 USE_KOREAN="--use_korean"
 GPUS="0,1,2"
 DEBUG=""  # 디버그 모드: "--debug" 입력 시 샘플 1개만 테스트 (SAMPLES가 인덱스로 사용됨)
